@@ -4,9 +4,20 @@
 
 ; Assumes token register at $DE00, EXROM high, and NO banking at $8000
 
+; 128-byte line stride (CPLD prod_25mhz.v)
+;	The frame buffer is now 480 lines of 128 bytes instead of 480 lines
+;	of 80, so the CPLD can address it as {line, byte} without a counter.
+;	Pixel (x, y) is at y*128 + x/8 in hires (640 wide, 8 pixels a byte)
+;	and y*128 + x/4 in multicolor (320 wide, 4 pixels a byte). Only bytes
+;	0..79 of each line are shown; bytes 80..127 are free memory, which
+;	the C64 can write and (with this CPLD) read back through $DE03.
+;	The pictures are still 80 bytes a line, so loadPic skips 48 bytes
+;	after each line. These demos no longer suit the old 80-byte CPLD
+;	(prod.v): a picture would come out sheared.
+
 ; Multicolor Demo and test code
 
-	!to "mc2test.o", cbm
+	!to "mc3test.o", cbm
 
 ; BASIC stub to get a tokenized SYS command in.  Grabbed from 
 ;	https://harald.ist.org/howto/c64/acme-asm-template.html
@@ -136,7 +147,17 @@ loadPic	lda #<picstring	; print message
 		sta operand     ; store
 
 		inc  zpA
+		bne  .lab
+		inc  zpB
+.lab	lda  zpA		; 128-byte stride: after the 80th byte of a line,
+		and  #$7f		; skip the 48 bytes the screen doesn't show
+		cmp  #80
 		bne  .laa
+		lda  zpA
+		clc
+		adc  #48		; 80 + 48 = 128, the start of the next line
+		sta  zpA
+		bcc  .laa
 		inc  zpB
 .laa    lda  zpA
 		sta  lsb
@@ -170,7 +191,8 @@ nonauto					; This routine increments and stores to the pointer hardware
 
 !zone cs
 
-clearScreen
+clearScreen			; writes all 64 KB of the bank, so it covers the 128-byte
+				; lines as before (and the unused bytes 80..127 of each)
 
 		lda #<clearstring
 		sta zp1
@@ -202,7 +224,8 @@ clearScreen
 
 !zone fs
 
-fillScreen
+fillScreen			; writes all 64 KB of the bank, so it covers the 128-byte
+				; lines as before (and the unused bytes 80..127 of each)
 
 		lda #<fillstring
 		sta zp1
@@ -232,7 +255,8 @@ fillScreen
 
 !zone ef
 
-evenFill
+evenFill			; writes all 64 KB of the bank, so it covers the 128-byte
+				; lines as before (and the unused bytes 80..127 of each)
 
 		lda #<fillstring
 		sta zp1
@@ -264,7 +288,8 @@ evenFill
 
 !zone of
 
-oddFill
+oddFill			; writes all 64 KB of the bank, so it covers the 128-byte
+				; lines as before (and the unused bytes 80..127 of each)
 
 		lda #<fillstring
 		sta zp1
